@@ -1,25 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:path/path.dart';
-import 'package:sqflite/sqflite.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final database = openDatabase(
-    join(await getDatabasesPath(), 'habitos.db'),
-    onCreate: (db, version) {
-      return db.execute(
-        'CREATE TABLE tarefas(id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT)',
-      );
-    },
-    version: 1,
-  );
-
-  runApp(MyApp(database: database));
+void main() {
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final Future<Database> database;
-  const MyApp({super.key, required this.database});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -27,14 +13,13 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Gestor de Hábitos e Tarefas - Guilherme Datovo',
       theme: ThemeData(primarySwatch: Colors.indigo),
-      home: HomePage(database: database),
+      home: const HomePage(),
     );
   }
 }
 
 class HomePage extends StatefulWidget {
-  final Future<Database> database;
-  const HomePage({super.key, required this.database});
+  const HomePage({super.key});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -44,18 +29,18 @@ class _HomePageState extends State<HomePage> {
   List<Map<String, dynamic>> tarefas = [];
   final TextEditingController controller = TextEditingController();
 
+  // Removido: carregamento de banco
+  // Agora apenas inicializa uma lista vazia
   Future<void> _carregarTarefas() async {
-    final db = await widget.database;
-    final List<Map<String, dynamic>> maps = await db.query('tarefas');
-    setState(() => tarefas = maps);
+    setState(() {});
   }
 
+  // Adiciona uma tarefa apenas na lista
   Future<void> _adicionarTarefa(String titulo) async {
-    final db = await widget.database;
-    await db.insert('tarefas', {'titulo': titulo},
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    setState(() {
+      tarefas.add({'titulo': titulo});
+    });
     controller.clear();
-    _carregarTarefas();
   }
 
   @override

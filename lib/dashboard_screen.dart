@@ -19,14 +19,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final tarefas = await widget.database.query('tarefas');
 
     total = tarefas.length;
+
     final agora = DateTime.now();
 
-    // ----- TAREFAS VENCIDAS -----
     vencidas = tarefas.where((t) {
-      final prazoStr = t['prazo'] as String?;
-      if (prazoStr == null || prazoStr.isEmpty) return false;
-
       try {
+        final prazoStr = t['prazo']?.toString();
+        if (prazoStr == null || prazoStr.isEmpty) return false;
+
         final prazo = DateTime.parse(prazoStr).toLocal();
         return prazo.isBefore(agora);
       } catch (_) {
@@ -34,18 +34,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }).length;
 
-    abertas = total - vencidas;
+    abertas = tarefas.length - vencidas;
 
-    // ----- PRÓXIMA TAREFA -----
     final comPrazo = tarefas.where((t) {
-      final prazoStr = t['prazo'] as String?;
+      final prazoStr = t['prazo']?.toString();
       return prazoStr != null && prazoStr.isNotEmpty;
     }).toList();
 
     comPrazo.sort((a, b) {
       try {
-        final pa = DateTime.parse(a['prazo'] as String).toUtc();
-        final pb = DateTime.parse(b['prazo'] as String).toUtc();
+        final pa = DateTime.parse(a['prazo'].toString()).toUtc();
+        final pb = DateTime.parse(b['prazo'].toString()).toUtc();
         return pa.compareTo(pb);
       } catch (_) {
         return 0;
@@ -53,18 +52,80 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     if (comPrazo.isNotEmpty) {
-      final prazoStr = comPrazo.first['prazo'] as String?;
-      if (prazoStr != null) {
-        try {
-          final p = DateTime.parse(prazoStr).toLocal();
-          proxima =
-              "${p.day.toString().padLeft(2, '0')}/${p.month.toString().padLeft(2, '0')}/${p.year} • ${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}";
-        } catch (_) {
-          proxima = "Nenhuma";
-        }
+      try {
+        final p = DateTime.parse(comPrazo.first['prazo'].toString()).toLocal();
+        proxima =
+            "${p.day.toString().padLeft(2, '0')}/${p.month.toString().padLeft(2, '0')}/${p.year} • "
+            "${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}";
+      } catch (_) {
+        proxima = "Nenhuma";
       }
     } else {
       proxima = "Nenhuma";
     }
 
-    setState(() {
+    setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    carregarResumo();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: carregarResumo,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text("Dashboard",
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+
+          Card(
+            color: Colors.indigo.shade50,
+            child: ListTile(
+              leading: const Icon(Icons.list, size: 40),
+              title: const Text("Total de Tarefas"),
+              subtitle: Text("$total tarefas"),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          Card(
+            color: Colors.green.shade50,
+            child: ListTile(
+              leading: const Icon(Icons.check_circle, size: 40),
+              title: const Text("Tarefas Dentro do Prazo"),
+              subtitle: Text("$abertas tarefas"),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          Card(
+            color: Colors.red.shade50,
+            child: ListTile(
+              leading: const Icon(Icons.warning, size: 40),
+              title: const Text("Tarefas Vencidas"),
+              subtitle: Text("$vencidas tarefas"),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.schedule, size: 40),
+              title: const Text("Próxima tarefa a vencer"),
+              subtitle: Text(proxima),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

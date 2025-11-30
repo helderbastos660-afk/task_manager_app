@@ -122,12 +122,12 @@ class _HomePageState extends State<HomePage> {
   Future<bool> _confirmarExclusao(BuildContext context) async {
     return await showDialog<bool>(
           context: context,
-          builder: (c) => AlertDialog(
+          builder: (ctx) => AlertDialog(
             title: const Text('Confirmar'),
             content: const Text('Deseja realmente excluir esta tarefa?'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Não')),
-              ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Sim')),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
+              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim')),
             ],
           ),
         ) ??
@@ -148,7 +148,7 @@ class _HomePageState extends State<HomePage> {
 
     await showDialog(
       context: context,
-      builder: (c) {
+      builder: (dialogCtx) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
@@ -170,7 +170,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                       TextButton(
                         onPressed: () async {
-                          final newPrazo = await _selecionarPrazo(context);
+                          final newPrazo = await _selecionarPrazo(dialogCtx);
                           if (newPrazo != null) {
                             setStateDialog(() => prazo = newPrazo);
                           }
@@ -182,7 +182,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+                TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
                 ElevatedButton(
                   onPressed: () async {
                     final novoTitulo = tituloCtrl.text.trim();
@@ -199,7 +199,7 @@ class _HomePageState extends State<HomePage> {
                     );
 
                     await _carregarTarefas();
-                    Navigator.pop(context);
+                    Navigator.pop(dialogCtx);
                   },
                   child: const Text('Salvar'),
                 ),

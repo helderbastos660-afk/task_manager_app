@@ -3,16 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'dashboard_screen.dart'; // certifique-se de existir em lib/dashboard_screen.dart
+import 'dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializa sqlite para desktop (sqflite_common_ffi)
   sqfliteFfiInit();
   var databaseFactory = databaseFactoryFfi;
 
-  // Abre ou cria o banco de dados com a coluna `prazo`
   final database = await databaseFactory.openDatabase(
     join(await databaseFactory.getDatabasesPath(), 'habitos.db'),
     options: OpenDatabaseOptions(
@@ -36,21 +34,19 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Gestor de Hábitos e Tarefas - Guilherme Datovo',
+      title: 'Gestor de Tarefas - Guilherme Datovo',
       theme: ThemeData(
         primarySwatch: Colors.indigo,
-        // pequenas melhorias visuais
         appBarTheme: const AppBarTheme(centerTitle: true),
       ),
-      home: NavBar(database: database), // agora a nav principal
+      home: NavBar(database: database),
     );
   }
 }
 
-/* -------------------------
-   HomePage (sua tela atual)
-   (mantive o comportamento que você já tinha)
-   ------------------------- */
+/* --------------------------
+        HOME PAGE
+--------------------------- */
 class HomePage extends StatefulWidget {
   final Database database;
   const HomePage({super.key, required this.database});
@@ -70,7 +66,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _carregarTarefas() async {
-    final List<Map<String, dynamic>> maps = await widget.database.query(
+    final maps = await widget.database.query(
       'tarefas',
       orderBy: 'prazo ASC',
     );
@@ -103,7 +99,7 @@ class _HomePageState extends State<HomePage> {
 
     if (data == null) return null;
 
-    TimeOfDay? hora = await showTimePicker(
+    final hora = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
     );
@@ -114,15 +110,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _formatarPrazo(String iso) {
+    if (iso.isEmpty) return "Sem prazo";
     try {
       final dt = DateTime.parse(iso).toLocal();
-      final dia = dt.day.toString().padLeft(2, '0');
-      final mes = dt.month.toString().padLeft(2, '0');
-      final ano = dt.year;
-      final hora = dt.hour.toString().padLeft(2, '0');
-      final min = dt.minute.toString().padLeft(2, '0');
-      return '$dia/$mes/$ano • $hora:$min';
-    } catch (e) {
+      return "${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} • ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+    } catch (_) {
       return iso;
     }
   }
@@ -142,10 +134,12 @@ class _HomePageState extends State<HomePage> {
         false;
   }
 
-  // Edite tarefa (título + prazo)
+  /* -------- EDITAR TAREFA -------- */
+
   Future<void> _editarTarefa(int id, String oldTitulo, String oldPrazoIso) async {
     final tituloCtrl = TextEditingController(text: oldTitulo);
     DateTime? prazo;
+
     if (oldPrazoIso.isNotEmpty) {
       try {
         prazo = DateTime.parse(oldPrazoIso).toLocal();
@@ -154,54 +148,66 @@ class _HomePageState extends State<HomePage> {
 
     await showDialog(
       context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Editar tarefa'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: tituloCtrl, decoration: const InputDecoration(labelText: 'Título')),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(prazo != null ? _formatarPrazo(prazo.toIso8601String()) : 'Sem prazo'),
-                ),
-                TextButton(
+      builder: (c) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Editar tarefa'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: tituloCtrl,
+                    decoration: const InputDecoration(labelText: 'Título'),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          prazo != null ? _formatarPrazo(prazo!.toIso8601String()) : 'Sem prazo',
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          final newPrazo = await _selecionarPrazo(context);
+                          if (newPrazo != null) {
+                            setStateDialog(() => prazo = newPrazo);
+                          }
+                        },
+                        child: const Text('Escolher prazo'),
+                      )
+                    ],
+                  )
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+                ElevatedButton(
                   onPressed: () async {
-                    final newPrazo = await _selecionarPrazo(context);
-                    if (newPrazo != null) {
-                      prazo = newPrazo;
-                      setState(() {}); // só pra atualizar visual do dialog
-                    }
+                    final novoTitulo = tituloCtrl.text.trim();
+                    if (novoTitulo.isEmpty) return;
+
+                    await widget.database.update(
+                      'tarefas',
+                      {
+                        'titulo': novoTitulo,
+                        'prazo': prazo != null ? prazo!.toIso8601String() : '',
+                      },
+                      where: 'id = ?',
+                      whereArgs: [id],
+                    );
+
+                    await _carregarTarefas();
+                    Navigator.pop(context);
                   },
-                  child: const Text('Escolher prazo'),
-                )
+                  child: const Text('Salvar'),
+                ),
               ],
-            )
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () async {
-              final novoTitulo = tituloCtrl.text.trim();
-              if (novoTitulo.isEmpty) return;
-              await widget.database.update(
-                'tarefas',
-                {
-                  'titulo': novoTitulo,
-                  'prazo': prazo != null ? prazo!.toIso8601String() : '',
-                },
-                where: 'id = ?',
-                whereArgs: [id],
-              );
-              await _carregarTarefas();
-              Navigator.pop(c);
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -209,7 +215,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestor de Hábitos e Tarefas'),
+        title: const Text('Gestor de Tarefas'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -224,6 +230,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 10),
+
             Row(
               children: [
                 Expanded(
@@ -239,8 +246,7 @@ class _HomePageState extends State<HomePage> {
                         return;
                       }
                       final prazo = await _selecionarPrazo(context);
-                      if (prazo == null) return;
-                      await _adicionarTarefa(texto, prazo);
+                      if (prazo != null) await _adicionarTarefa(texto, prazo);
                     },
                   ),
                 ),
@@ -254,34 +260,38 @@ class _HomePageState extends State<HomePage> {
                       );
                       return;
                     }
-                    final prazo = DateTime.now().add(const Duration(hours: 24));
-                    await _adicionarTarefa(texto, prazo);
+                    await _adicionarTarefa(
+                      texto,
+                      DateTime.now().add(const Duration(hours: 24)),
+                    );
                   },
                   child: const Text('+24h'),
                 ),
               ],
             ),
+
             const SizedBox(height: 20),
+
             Expanded(
               child: tarefas.isEmpty
-                  ? const Center(child: Text('Nenhuma tarefa. Adicione usando o campo acima.'))
+                  ? const Center(child: Text('Nenhuma tarefa.'))
                   : RefreshIndicator(
                       onRefresh: _carregarTarefas,
                       child: ListView.builder(
                         itemCount: tarefas.length,
                         itemBuilder: (context, index) {
                           final tarefa = tarefas[index];
-                          final titulo = tarefa['titulo'] as String? ?? '';
-                          final prazoIso = tarefa['prazo'] as String? ?? '';
+                          final titulo = tarefa['titulo'] ?? '';
+                          final prazoIso = tarefa['prazo'] ?? '';
+
                           DateTime? prazo;
                           bool expirou = false;
+
                           if (prazoIso.isNotEmpty) {
                             try {
                               prazo = DateTime.parse(prazoIso).toLocal();
                               expirou = DateTime.now().isAfter(prazo);
-                            } catch (e) {
-                              prazo = null;
-                            }
+                            } catch (_) {}
                           }
 
                           return Card(
@@ -299,23 +309,24 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                               subtitle: prazo != null
-                                  ? Text('Prazo: ${_formatarPrazo(prazo.toIso8601String())}')
-                                  : const Text('Sem prazo'),
+                                  ? Text("Prazo: ${_formatarPrazo(prazoIso)}")
+                                  : const Text("Sem prazo"),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.edit, color: Colors.blue),
-                                    onPressed: () => _editarTarefa(tarefa['id'] as int, titulo, prazoIso),
+                                    onPressed: () =>
+                                        _editarTarefa(tarefa['id'], titulo, prazoIso),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete),
                                     onPressed: () async {
-                                      final ok = await _confirmarExclusao(context);
-                                      if (!ok) return;
-                                      await _deletarTarefa(tarefa['id'] as int);
+                                      if (await _confirmarExclusao(context)) {
+                                        await _deletarTarefa(tarefa['id']);
+                                      }
                                     },
-                                  ),
+                                  )
                                 ],
                               ),
                             ),
@@ -331,9 +342,10 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/* -------------------------
-   NavBar que troca entre Dashboard e Tarefas
-   ------------------------- */
+/* --------------------------------
+        NAV BAR
+--------------------------------- */
+
 class NavBar extends StatefulWidget {
   final Database database;
   const NavBar({super.key, required this.database});
@@ -356,17 +368,11 @@ class _NavBarState extends State<NavBar> {
       body: telas[index],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: index,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: "Dashboard",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.checklist),
-            label: "Tarefas",
-          ),
-        ],
         onTap: (i) => setState(() => index = i),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: "Dashboard"),
+          BottomNavigationBarItem(icon: Icon(Icons.checklist), label: "Tarefas"),
+        ],
       ),
     );
   }

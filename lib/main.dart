@@ -73,10 +73,10 @@ class _HomePageState extends State<HomePage> {
     setState(() => tarefas = maps);
   }
 
-  Future<void> _adicionarTarefa(String titulo, DateTime prazo) async {
+  Future<void> _adicionarTarefa(String titulo, DateTime? prazo) async {
     await widget.database.insert('tarefas', {
       'titulo': titulo,
-      'prazo': prazo.toIso8601String(),
+      'prazo': prazo?.toIso8601String() ?? '',
     });
     controller.clear();
     await _carregarTarefas();
@@ -122,12 +122,12 @@ class _HomePageState extends State<HomePage> {
   Future<bool> _confirmarExclusao(BuildContext context) async {
     return await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
+          builder: (BuildContext c) => AlertDialog(
             title: const Text('Confirmar'),
             content: const Text('Deseja realmente excluir esta tarefa?'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
-              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim')),
+              TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Não')),
+              ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Sim')),
             ],
           ),
         ) ??
@@ -135,7 +135,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   /* -------- EDITAR TAREFA -------- */
-
   Future<void> _editarTarefa(int id, String oldTitulo, String oldPrazoIso) async {
     final tituloCtrl = TextEditingController(text: oldTitulo);
     DateTime? prazo;
@@ -148,9 +147,9 @@ class _HomePageState extends State<HomePage> {
 
     await showDialog(
       context: context,
-      builder: (dialogCtx) {
+      builder: (BuildContext contextDialog) {
         return StatefulBuilder(
-          builder: (context, setStateDialog) {
+          builder: (BuildContext contextDialog2, setStateDialog) {
             return AlertDialog(
               title: const Text('Editar tarefa'),
               content: Column(
@@ -165,12 +164,12 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Expanded(
                         child: Text(
-                          prazo != null ? _formatarPrazo(prazo!.toIso8601String()) : 'Sem prazo',
+                          prazo != null ? _formatarPrazo(prazo.toIso8601String()) : 'Sem prazo',
                         ),
                       ),
                       TextButton(
                         onPressed: () async {
-                          final newPrazo = await _selecionarPrazo(dialogCtx);
+                          final newPrazo = await _selecionarPrazo(context);
                           if (newPrazo != null) {
                             setStateDialog(() => prazo = newPrazo);
                           }
@@ -182,7 +181,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+                TextButton(onPressed: () => Navigator.pop(contextDialog), child: const Text('Cancelar')),
                 ElevatedButton(
                   onPressed: () async {
                     final novoTitulo = tituloCtrl.text.trim();
@@ -192,14 +191,14 @@ class _HomePageState extends State<HomePage> {
                       'tarefas',
                       {
                         'titulo': novoTitulo,
-                        'prazo': prazo != null ? prazo!.toIso8601String() : '',
+                        'prazo': prazo?.toIso8601String() ?? '',
                       },
                       where: 'id = ?',
                       whereArgs: [id],
                     );
 
                     await _carregarTarefas();
-                    Navigator.pop(dialogCtx);
+                    Navigator.pop(contextDialog);
                   },
                   child: const Text('Salvar'),
                 ),
@@ -230,7 +229,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 10),
-
             Row(
               children: [
                 Expanded(
@@ -260,18 +258,13 @@ class _HomePageState extends State<HomePage> {
                       );
                       return;
                     }
-                    await _adicionarTarefa(
-                      texto,
-                      DateTime.now().add(const Duration(hours: 24)),
-                    );
+                    await _adicionarTarefa(texto, DateTime.now().add(const Duration(hours: 24)));
                   },
                   child: const Text('+24h'),
                 ),
               ],
             ),
-
             const SizedBox(height: 20),
-
             Expanded(
               child: tarefas.isEmpty
                   ? const Center(child: Text('Nenhuma tarefa.'))
@@ -309,15 +302,14 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                               subtitle: prazo != null
-                                  ? Text("Prazo: ${_formatarPrazo(prazoIso)}")
+                                  ? Text("Prazo: ${_formatarPrazo(prazo.toIso8601String())}")
                                   : const Text("Sem prazo"),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.edit, color: Colors.blue),
-                                    onPressed: () =>
-                                        _editarTarefa(tarefa['id'], titulo, prazoIso),
+                                    onPressed: () => _editarTarefa(tarefa['id'], titulo, prazoIso),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete),

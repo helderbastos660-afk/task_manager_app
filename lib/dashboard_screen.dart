@@ -1,3 +1,4 @@
+// lib/dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -10,121 +11,59 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int total = 0;
-  int vencidas = 0;
-  int abertas = 0;
-  String proxima = "Nenhuma";
-
-  Future<void> carregarResumo() async {
-    final tarefas = await widget.database.query('tarefas');
-
-    total = tarefas.length;
-
-    final agora = DateTime.now();
-
-    vencidas = tarefas.where((t) {
-      try {
-        final prazoStr = t['prazo']?.toString();
-        if (prazoStr == null || prazoStr.isEmpty) return false;
-
-        final prazo = DateTime.parse(prazoStr).toLocal();
-        return prazo.isBefore(agora);
-      } catch (_) {
-        return false;
-      }
-    }).length;
-
-    abertas = tarefas.length - vencidas;
-
-    final comPrazo = tarefas.where((t) {
-      final prazoStr = t['prazo']?.toString();
-      return prazoStr != null && prazoStr.isNotEmpty;
-    }).toList();
-
-    comPrazo.sort((a, b) {
-      try {
-        final pa = DateTime.parse(a['prazo'].toString()).toUtc();
-        final pb = DateTime.parse(b['prazo'].toString()).toUtc();
-        return pa.compareTo(pb);
-      } catch (_) {
-        return 0;
-      }
-    });
-
-    if (comPrazo.isNotEmpty) {
-      try {
-        final p = DateTime.parse(comPrazo.first['prazo'].toString()).toLocal();
-        proxima =
-            "${p.day.toString().padLeft(2, '0')}/${p.month.toString().padLeft(2, '0')}/${p.year} • "
-            "${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}";
-      } catch (_) {
-        proxima = "Nenhuma";
-      }
-    } else {
-      proxima = "Nenhuma";
-    }
-
-    setState(() {});
-  }
+  int totalTarefas = 0;
 
   @override
   void initState() {
     super.initState();
-    carregarResumo();
+    _carregarTotalTarefas();
+  }
+
+  Future<void> _carregarTotalTarefas() async {
+    final countQuery = await widget.database.rawQuery('SELECT COUNT(*) AS total FROM tarefas');
+    setState(() {
+      totalTarefas = (countQuery.first['total'] ?? 0) as int;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: carregarResumo,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text("Dashboard",
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-
-          Card(
-            color: Colors.indigo.shade50,
-            child: ListTile(
-              leading: const Icon(Icons.list, size: 40),
-              title: const Text("Total de Tarefas"),
-              subtitle: Text("$total tarefas"),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Dashboard'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Card(
+              color: Colors.indigo.shade50,
+              child: ListTile(
+                leading: const Icon(Icons.checklist, color: Colors.indigo),
+                title: const Text('Total de Tarefas'),
+                trailing: Text(totalTarefas.toString(), style: const TextStyle(fontSize: 20)),
+              ),
             ),
-          ),
-
-          const SizedBox(height: 10),
-
-          Card(
-            color: Colors.green.shade50,
-            child: ListTile(
-              leading: const Icon(Icons.check_circle, size: 40),
-              title: const Text("Tarefas Dentro do Prazo"),
-              subtitle: Text("$abertas tarefas"),
+            const SizedBox(height: 20),
+            Card(
+              color: Colors.green.shade50,
+              child: ListTile(
+                leading: const Icon(Icons.done_all, color: Colors.green),
+                title: const Text('Tarefas concluídas'),
+                trailing: const Text('0', style: TextStyle(fontSize: 20)), // futuramente calcular
+              ),
             ),
-          ),
-
-          const SizedBox(height: 10),
-
-          Card(
-            color: Colors.red.shade50,
-            child: ListTile(
-              leading: const Icon(Icons.warning, size: 40),
-              title: const Text("Tarefas Vencidas"),
-              subtitle: Text("$vencidas tarefas"),
+            const SizedBox(height: 20),
+            Card(
+              color: Colors.red.shade50,
+              child: ListTile(
+                leading: const Icon(Icons.warning, color: Colors.red),
+                title: const Text('Tarefas expiradas'),
+                trailing: const Text('0', style: TextStyle(fontSize: 20)), // futuramente calcular
+              ),
             ),
-          ),
-
-          const SizedBox(height: 10),
-
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.schedule, size: 40),
-              title: const Text("Próxima tarefa a vencer"),
-              subtitle: Text(proxima),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,9 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'dashboard_screen.dart'; // certifique-se de existir em lib/dashboard_screen.dart
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,12 +37,20 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Gestor de Hábitos e Tarefas - Guilherme Datovo',
-      theme: ThemeData(primarySwatch: Colors.indigo),
-      home: HomePage(database: database),
+      theme: ThemeData(
+        primarySwatch: Colors.indigo,
+        // pequenas melhorias visuais
+        appBarTheme: const AppBarTheme(centerTitle: true),
+      ),
+      home: NavBar(database: database), // agora a nav principal
     );
   }
 }
 
+/* -------------------------
+   HomePage (sua tela atual)
+   (mantive o comportamento que você já tinha)
+   ------------------------- */
 class HomePage extends StatefulWidget {
   final Database database;
   const HomePage({super.key, required this.database});
@@ -61,7 +72,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _carregarTarefas() async {
     final List<Map<String, dynamic>> maps = await widget.database.query(
       'tarefas',
-      orderBy: 'prazo ASC', // opcional: ordena por prazo (mais urgente primeiro)
+      orderBy: 'prazo ASC',
     );
     setState(() => tarefas = maps);
   }
@@ -80,14 +91,13 @@ class _HomePageState extends State<HomePage> {
     await _carregarTarefas();
   }
 
-  // Seleciona data + hora (DatePicker + TimePicker)
   Future<DateTime?> _selecionarPrazo(BuildContext context) async {
     final now = DateTime.now();
 
     DateTime? data = await showDatePicker(
       context: context,
       initialDate: now,
-      firstDate: now,
+      firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
 
@@ -103,7 +113,6 @@ class _HomePageState extends State<HomePage> {
     return DateTime(data.year, data.month, data.day, hora.hour, hora.minute);
   }
 
-  // Formata a data/hora para exibição
   String _formatarPrazo(String iso) {
     try {
       final dt = DateTime.parse(iso).toLocal();
@@ -118,7 +127,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Mostra diálogo para confirmar exclusão
   Future<bool> _confirmarExclusao(BuildContext context) async {
     return await showDialog<bool>(
           context: context,
@@ -134,18 +142,79 @@ class _HomePageState extends State<HomePage> {
         false;
   }
 
+  // Edite tarefa (título + prazo)
+  Future<void> _editarTarefa(int id, String oldTitulo, String oldPrazoIso) async {
+    final tituloCtrl = TextEditingController(text: oldTitulo);
+    DateTime? prazo;
+    if (oldPrazoIso.isNotEmpty) {
+      try {
+        prazo = DateTime.parse(oldPrazoIso).toLocal();
+      } catch (_) {}
+    }
+
+    await showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Editar tarefa'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: tituloCtrl, decoration: const InputDecoration(labelText: 'Título')),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(prazo != null ? _formatarPrazo(prazo.toIso8601String()) : 'Sem prazo'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final newPrazo = await _selecionarPrazo(context);
+                    if (newPrazo != null) {
+                      prazo = newPrazo;
+                      setState(() {}); // só pra atualizar visual do dialog
+                    }
+                  },
+                  child: const Text('Escolher prazo'),
+                )
+              ],
+            )
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () async {
+              final novoTitulo = tituloCtrl.text.trim();
+              if (novoTitulo.isEmpty) return;
+              await widget.database.update(
+                'tarefas',
+                {
+                  'titulo': novoTitulo,
+                  'prazo': prazo != null ? prazo!.toIso8601String() : '',
+                },
+                where: 'id = ?',
+                whereArgs: [id],
+              );
+              await _carregarTarefas();
+              Navigator.pop(c);
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestor de Hábitos e Tarefas'),
-        centerTitle: true,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Campo para texto da tarefa
             TextField(
               controller: controller,
               decoration: const InputDecoration(
@@ -155,8 +224,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 10),
-
-            // Botões: escolher prazo e adicionar
             Row(
               children: [
                 Expanded(
@@ -166,7 +233,6 @@ class _HomePageState extends State<HomePage> {
                     onPressed: () async {
                       final texto = controller.text.trim();
                       if (texto.isEmpty) {
-                        // pede para digitar título primeiro
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Digite o título antes de escolher o prazo.')),
                         );
@@ -179,7 +245,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Botão rápido: escolher prazo automático de 24h (exemplo)
                 ElevatedButton(
                   onPressed: () async {
                     final texto = controller.text.trim();
@@ -196,10 +261,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-
             const SizedBox(height: 20),
-
-            // Lista de tarefas
             Expanded(
               child: tarefas.isEmpty
                   ? const Center(child: Text('Nenhuma tarefa. Adicione usando o campo acima.'))
@@ -243,6 +305,10 @@ class _HomePageState extends State<HomePage> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
+                                    icon: const Icon(Icons.edit, color: Colors.blue),
+                                    onPressed: () => _editarTarefa(tarefa['id'] as int, titulo, prazoIso),
+                                  ),
+                                  IconButton(
                                     icon: const Icon(Icons.delete),
                                     onPressed: () async {
                                       final ok = await _confirmarExclusao(context);
@@ -260,6 +326,47 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/* -------------------------
+   NavBar que troca entre Dashboard e Tarefas
+   ------------------------- */
+class NavBar extends StatefulWidget {
+  final Database database;
+  const NavBar({super.key, required this.database});
+
+  @override
+  State<NavBar> createState() => _NavBarState();
+}
+
+class _NavBarState extends State<NavBar> {
+  int index = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final telas = [
+      DashboardScreen(database: widget.database),
+      HomePage(database: widget.database),
+    ];
+
+    return Scaffold(
+      body: telas[index],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: index,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard),
+            label: "Dashboard",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.checklist),
+            label: "Tarefas",
+          ),
+        ],
+        onTap: (i) => setState(() => index = i),
       ),
     );
   }
